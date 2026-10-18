@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stride | Sneaker Store</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #111; background: #fff; }
+  button { font-family: inherit; cursor: pointer; }
+
+  .promo { background: #f5f5f5; text-align: center; font-size: 13px; padding: 8px; }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 4vw; position: sticky; top: 0; background: #fff; z-index: 5; border-bottom: 1px solid #eee; }
+  .logo { font-size: 26px; font-weight: 900; font-style: italic; letter-spacing: -1px; }
+  nav ul { list-style: none; display: flex; gap: 28px; font-weight: 500; }
+  nav ul li { cursor: pointer; }
+  nav ul li:hover { text-decoration: underline; text-underline-offset: 6px; }
+  .cart-btn { background: none; border: none; font-size: 15px; font-weight: 500; }
+
+  .hero { background: #111; color: #fff; padding: 90px 4vw; }
+  .hero h1 { font-size: clamp(44px, 9vw, 120px); line-height: .92; font-weight: 900; text-transform: uppercase; letter-spacing: -2px; max-width: 900px; }
+  .hero p { margin: 22px 0 28px; max-width: 420px; color: #ccc; font-size: 17px; line-height: 1.5; }
+  .btn { background: #fff; color: #111; border: none; padding: 14px 30px; border-radius: 30px; font-size: 16px; font-weight: 500; }
+  .btn:hover { background: #ddd; }
+
+  .section { padding: 48px 4vw; }
+  .section h2 { font-size: 26px; font-weight: 500; margin-bottom: 18px; }
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 26px; }
+  .pill { border: 1px solid #ccc; background: #fff; padding: 8px 18px; border-radius: 20px; font-size: 15px; }
+  .pill.active { background: #111; color: #fff; border-color: #111; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px 16px; }
+  .tile { height: 260px; display: flex; align-items: center; justify-content: center; font-size: 80px; }
+  .info { padding-top: 10px; }
+  .info .name { font-weight: 500; }
+  .info .cat { color: #707070; font-size: 14px; margin: 2px 0 6px; }
+  .info .row { display: flex; justify-content: space-between; align-items: center; }
+  .add { border: 1px solid #111; background: #fff; border-radius: 20px; padding: 6px 14px; font-size: 14px; }
+  .add:hover { background: #111; color: #fff; }
+
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 9; }
+  #overlay.open { display: block; }
+  #drawer { position: fixed; top: 0; right: -380px; width: 360px; max-width: 100%; height: 100%; background: #fff; z-index: 10; padding: 24px; transition: right .25s; display: flex; flex-direction: column; }
+  #drawer.open { right: 0; }
+  #drawer h3 { font-size: 22px; font-weight: 500; margin-bottom: 16px; }
+  #items { flex: 1; overflow-y: auto; }
+  .item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 15px; }
+  .item button { border: none; background: none; color: #707070; text-decoration: underline; margin-top: 4px; font-size: 13px; }
+  .total { display: flex; justify-content: space-between; font-weight: 500; padding: 16px 0; font-size: 18px; }
+  .checkout { background: #111; color: #fff; border: none; padding: 16px; border-radius: 30px; font-size: 16px; width: 100%; }
+
+  footer { background: #111; color: #999; text-align: center; padding: 30px; font-size: 14px; margin-top: 40px; }
+  @media (max-width: 640px) { nav ul { display: none; } }
+</style>
+</head>
+<body>
+  <div class="promo">Free shipping on orders over $100</div>
+
+  <nav>
+    <div class="logo">Stride</div>
+    <ul>
+      <li onclick="setFilter('All')">New</li>
+      <li onclick="setFilter('Running')">Running</li>
+      <li onclick="setFilter('Basketball')">Basketball</li>
+      <li onclick="setFilter('Lifestyle')">Lifestyle</li>
+    </ul>
+    <button class="cart-btn" onclick="toggleCart(true)">Cart (<span id="count">0</span>)</button>
+  </nav>
+
+  <header class="hero">
+    <h1>Run your own pace</h1>
+    <p>Lightweight sneakers built for the track, the court and the street.</p>
+    <button class="btn" onclick="document.getElementById('shop').scrollIntoView({behavior:'smooth'})">Shop now</button>
+  </header>
+
+  <section class="section" id="shop">
+    <h2>Featured shoes</h2>
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid">Loading...</div>
+  </section>
+
+  <div id="overlay" onclick="toggleCart(false)"></div>
+  <aside id="drawer">
+    <h3>Your cart</h3>
+    <div id="items"></div>
+    <div class="total"><span>Total</span><span id="total">$0</span></div>
+    <button class="checkout" onclick="checkout()">Checkout</button>
+  </aside>
+
+  <footer>Stride demo store. Built for practicing AWS and Nginx deployment.</footer>
+
+<script>
+  let products = [];
+  let cart = [];
+  let filter = "All";
+
+  fetch("/api/products")
+    .then(r => r.json())
+    .then(data => { products = data; renderFilters(); renderGrid(); })
+    .catch(() => document.getElementById("grid").textContent = "Failed to load products.");
+
+  function renderFilters() {
+    const cats = ["All", ...new Set(products.map(p => p.category))];
+    document.getElementById("filters").innerHTML = cats.map(c =>
+      `<button class="pill ${c === filter ? "active" : ""}" onclick="setFilter('${c}')">${c}</button>`).join("");
+  }
+
+  function setFilter(c) {
+    filter = c;
+    renderFilters();
+    renderGrid();
+    document.getElementById("shop").scrollIntoView({ behavior: "smooth" });
+  }
+
+  function renderGrid() {
+    const list = filter === "All" ? products : products.filter(p => p.category === filter);
+    document.getElementById("grid").innerHTML = list.map(p => `
+      <div>
+        <div class="tile" style="background:${p.color}">${p.icon}</div>
+        <div class="info">
+          <div class="name">${p.name}</div>
+          <div class="cat">${p.category}</div>
+          <div class="row"><span>$${p.price}</span><button class="add" onclick="addToCart(${p.id})">Add to cart</button></div>
+        </div>
+      </div>`).join("");
+  }
+
+  function addToCart(id) {
+    cart.push(products.find(p => p.id === id));
+    renderCart();
+    toggleCart(true);
+  }
+
+  function removeFromCart(i) { cart.splice(i, 1); renderCart(); }
+
+  function renderCart() {
+    document.getElementById("count").textContent = cart.length;
+    document.getElementById("total").textContent = "$" + cart.reduce((s, p) => s + p.price, 0);
+    document.getElementById("items").innerHTML = cart.length
+      ? cart.map((p, i) => `<div class="item"><div>${p.name}<br><button onclick="removeFromCart(${i})">Remove</button></div><div>$${p.price}</div></div>`).join("")
+      : "<p>Your cart is empty. Add a pair to get started.</p>";
+  }
+
+  function toggleCart(open) {
+    document.getElementById("drawer").classList.toggle("open", open);
+    document.getElementById("overlay").classList.toggle("open", open);
+  }
+
+  function checkout() {
+    if (!cart.length) return alert("Your cart is empty.");
+    alert("Demo store: no real checkout. Thanks for testing!");
+    cart = []; renderCart(); toggleCart(false);
+  }
+
+  renderCart();
+</script>
+</body>
+</html>

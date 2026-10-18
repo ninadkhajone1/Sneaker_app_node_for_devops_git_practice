@@ -1,0 +1,12 @@
+{
+  "name": "sneaker-store-app",
+  "version": "1.0.0",
+  "description": "Basic sneaker store frontend for practicing AWS + Nginx deployment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
